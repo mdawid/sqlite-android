@@ -946,6 +946,86 @@ public class DatabaseGeneralTest extends AndroidTestCase implements PerformanceT
         }
     }
 
+    /**
+     * Tests polish accented characters order.
+     * This test is available only when the platform has a locale with the language "pl".
+     * It finishes without failure when it is not available.
+     */
+    @MediumTest
+    public void testCollateLocalizedForPolish() throws Exception {
+        final String testName = "DatabaseGeneralTest#testCollateLocalizedForPolish()";
+        final Locale[] localeArray = Locale.getAvailableLocales();
+        final String polish = new Locale( "pl", "PL" ).getLanguage();
+        final String english = Locale.ENGLISH.getLanguage();
+        Locale polishLocale = null;
+        Locale englishLocale = null;
+        for (Locale locale : localeArray) {
+            if (locale != null) {
+                final String language = locale.getLanguage();
+                if (language == null) {
+                    continue;
+                } else if (language.equals(polish)) {
+                    polishLocale = locale;
+                } else if (language.equals(english)) {
+                    englishLocale = locale;
+                }
+            }
+
+            if (polishLocale != null && englishLocale != null) {
+                break;
+            }
+        }
+
+        if (polishLocale == null || englishLocale == null) {
+            Log.d(TAG, testName + "n is silently skipped since " +
+                    (englishLocale == null ?
+                            (polishLocale == null ?
+                                    "Both English and Polish locales do not exist." :
+                                    "English locale does not exist.") :
+                            (polishLocale == null ?
+                                    "Polish locale does not exist." :
+                                    "...why?")));
+            return;
+        }
+
+        Locale originalLocale = Locale.getDefault();
+        try {
+            final String tableName = "pl_collate_localized_test";
+            mDatabase.execSQL("CREATE TABLE " + tableName + " (" +
+                                      "_id INTEGER PRIMARY KEY, " +
+                                      "s TEXT COLLATE LOCALIZED) ");
+            ContentValues cv = new ContentValues();  //
+            cv.put( "s", "miska" );
+            mDatabase.insert( tableName, "s", cv );
+
+            cv = new ContentValues();
+            cv.put( "s", "łaska" );
+            mDatabase.insert( tableName, "s", cv );
+
+            cv.put("s", "laska");
+            mDatabase.insert( tableName, "s", cv );
+
+            Locale.setDefault( englishLocale );
+            Locale.setDefault( polishLocale );
+
+            Cursor cur = mDatabase.rawQuery(
+                    "SELECT * FROM " + tableName + " ORDER BY s", null );
+            assertTrue( cur.moveToFirst() );
+            assertEquals( "laska", cur.getString( 1 ) );
+            assertTrue( cur.moveToNext() );
+            assertEquals( "łaska", cur.getString( 1 ) );
+            assertTrue( cur.moveToNext() );
+            assertEquals( "miska", cur.getString( 1 ) );
+        } finally {
+            if (originalLocale != null) {
+                try {
+                    Locale.setDefault(originalLocale);
+                } catch (Exception ignored) {
+                }
+            }
+        }
+    }
+
     @SmallTest
     public void testSetMaxCacheSize() {
         mDatabase.execSQL("CREATE TABLE test (i int, j int);");
